@@ -52,7 +52,7 @@
   <div class="hero">
     <p class="hero-line">
       Paste code and get &nbsp;
-      <span class="type-target" id="typeTarget">instant AI analysis</span>
+      <span class="type-target" id="typeTarget">instant code analysis</span>
       <span class="cursor-blink">|</span>
     </p>
   </div>
@@ -141,17 +141,18 @@
     <div class="chat-header">
       <div class="chat-title-wrap">
         <span class="chat-icon">🤖</span>
-        <span class="chat-title">Chat with your Code</span>
+        <span class="chat-title">Ask about your analysis</span>
+        <span style="font-size:11px;color:var(--text-dim);margin-left:10px">Rule-based helper: answers come from your analysis results, not from an AI model</span>
       </div>
     </div>
     <div class="chat-messages" id="chatMessages">
       <div class="bubble ai">
         <div class="bubble-avatar">AI</div>
-        <div class="bubble-content">Hi! Analyze your code first, then ask me anything — bugs, optimization tips, security review, or concept explanations.</div>
+        <div class="bubble-content">Analyze your code first, then ask about the results: bugs, complexity, security findings, quality score, or how to improve. I read your analysis and reply with fixed, rule-based answers. I am not an AI model.</div>
       </div>
     </div>
     <div class="chat-input-row">
-      <input type="text" id="chatInput" placeholder="Ask something about your code..."/>
+      <input type="text" id="chatInput" placeholder="Ask about the analysis, e.g. what bugs were found?"/>
       <button class="chat-send" onclick="sendChat()">
         <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
           <path d="M2 9h14M9 2l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>

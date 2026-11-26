@@ -178,7 +178,7 @@ GOOD_CODE_EXAMPLES = [
         freq[word] = freq.get(word, 0) + 1
     return freq''',
 
-    '''def validate_email(email):
+    r'''def validate_email(email):
     import re
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(pattern, email))''',
@@ -524,7 +524,7 @@ function merge(left, right) {
     }
 }''',
 
-    '''function validateEmail(email) {
+    r'''function validateEmail(email) {
     const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return pattern.test(email);
 }''',
@@ -1235,20 +1235,33 @@ DROP TABLE IF EXISTS products;''',
 ]
 
 
-def train_model():
-    X_train = GOOD_CODE_EXAMPLES + BAD_CODE_EXAMPLES
-    y_train = ([1] * len(GOOD_CODE_EXAMPLES) + [0] * len(BAD_CODE_EXAMPLES))
+def build_pipeline(fit_prior=False):
+    """TF-IDF + Multinomial Naive Bayes.
 
-    model = Pipeline([
+    fit_prior=False gives both classes equal prior probability. With the
+    default (True) the model inherits the 58% / 42% Good / Needs-Improvement
+    split of the training samples and leans towards "Good Code".
+    """
+    return Pipeline([
         ('tfidf', TfidfVectorizer(
             analyzer='word',
             ngram_range=(1, 3),
             max_features=3000,
             sublinear_tf=True
         )),
-        ('classifier', MultinomialNB(alpha=0.3))
+        ('classifier', MultinomialNB(alpha=0.3, fit_prior=fit_prior))
     ])
 
+
+def training_data():
+    X = GOOD_CODE_EXAMPLES + BAD_CODE_EXAMPLES
+    y = [1] * len(GOOD_CODE_EXAMPLES) + [0] * len(BAD_CODE_EXAMPLES)
+    return X, y
+
+
+def train_model(fit_prior=False):
+    X_train, y_train = training_data()
+    model = build_pipeline(fit_prior)
     model.fit(X_train, y_train)
     return model
 

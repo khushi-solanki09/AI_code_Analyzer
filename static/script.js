@@ -68,7 +68,7 @@ let currentTab = "overview";
 // ---- TYPING EFFECT ----
 (function () {
   const phrases = [
-    "instant AI analysis",
+    "instant code analysis",
     "real-time bug detection",
     "complexity breakdown",
     "security scanning",
@@ -305,7 +305,7 @@ function showTab(tabName) {
         </div>
         <p class="bug-msg">${bug.message}</p>
         <code class="bug-code">${escapeHtml(bug.code)}</code>
-        ${bug.fix ? `<p style="margin-top:6px;font-size:12px;color:#34d399;background:rgba(52,211,153,0.08);padding:6px 10px;border-radius:6px;border-left:2px solid #34d399">Fix: ${bug.fix}</p>` : ''}
+        ${bug.fix ? `<p style="margin-top:6px;font-size:12px;color:#34d399;background:rgba(52,211,153,0.08);padding:6px 10px;border-radius:6px;border-left:2px solid #34d399">Fix: ${escapeHtml(bug.fix)}</p>` : ''}
       </div>`;
     });
     resultBody.innerHTML = html;
@@ -347,7 +347,7 @@ function showTab(tabName) {
         </div>
         <p class="bug-msg">${bug.message}</p>
         <code class="bug-code">${escapeHtml(bug.code)}</code>
-        ${bug.fix ? `<p style="margin-top:6px;font-size:12px;color:#34d399;background:rgba(52,211,153,0.08);padding:6px 10px;border-radius:6px;border-left:2px solid #34d399">Fix: ${bug.fix}</p>` : ''}
+        ${bug.fix ? `<p style="margin-top:6px;font-size:12px;color:#34d399;background:rgba(52,211,153,0.08);padding:6px 10px;border-radius:6px;border-left:2px solid #34d399">Fix: ${escapeHtml(bug.fix)}</p>` : ''}
       </div>`;
     });
     resultBody.innerHTML = html;
@@ -370,7 +370,7 @@ function showTab(tabName) {
           <div class="pbar-fill" style="width:${score}%;background:linear-gradient(90deg,${mainColor},#8b5cf6)"></div>
         </div>
         <p style="margin-top:12px;font-size:10px;color:var(--text-dim);text-align:center">
-          Model: Naive Bayes + TF-IDF · Trained on 150+ code samples
+          Model: Naive Bayes + TF-IDF · Trained on 151 hand-written samples · indicative only
         </p>
       </div>`;
   }
@@ -468,7 +468,7 @@ function sendChat() {
   } else if (q.includes("security") || q.includes("safe") || q.includes("secure") || q.includes("vulnerable") || q.includes("password") || q.includes("hack")) {
     const secBugs = bugs.filter(b => b.category === "Security");
     if (secBugs.length === 0) {
-      addBubble("<b>Security scan passed!</b> No security issues found. No hardcoded passwords, no <code>eval()</code>, no <code>exec()</code> detected. Your code looks safe!", "ai");
+      addBubble("<b>No security rules were triggered.</b> This is pattern matching, not a full security audit, so it cannot prove the code is safe.", "ai");
     } else {
       let reply = `<b>${secBugs.length} security issue(s) found — these must be fixed:</b><br><br>`;
       secBugs.forEach(b => { reply += `Line ${b.line}: ${b.message}<br>`; });
@@ -495,8 +495,8 @@ function sendChat() {
     addBubble(reply, "ai");
 
   // HELLO
-  } else if (q.includes("hi") || q.includes("hello") || q.includes("hey")) {
-    addBubble("Hi! I'm your Code Analysis Assistant. Your code has been analyzed. You can ask me:<br><br>• <b>'How do I optimize my code?'</b><br>• <b>'What bugs were found?'</b><br>• <b>'Is my code secure?'</b><br>• <b>'What is my quality score?'</b><br>• <b>'Explain my code'</b>", "ai");
+  } else if (/\b(hi|hello|hey)\b/.test(q)) {
+    addBubble("Hi! I answer questions about your analysis results (rule-based, not an AI model). You can ask me:<br><br>• <b>'How do I optimize my code?'</b><br>• <b>'What bugs were found?'</b><br>• <b>'Is my code secure?'</b><br>• <b>'What is my quality score?'</b><br>• <b>'Explain my code'</b>", "ai");
 
   // DEFAULT
   } else {
