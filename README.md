@@ -133,7 +133,7 @@ For production use a WSGI server, for example `gunicorn app:app`.
 docker compose up --build        # http://localhost:8000
 ```
 
-The image runs gunicorn as an unprivileged user and has a health check on `/health`. The Dockerfile has not been built on the machine where this was written (no Docker daemon was available); the CI workflow builds it and smoke-tests the container on every push.
+The image runs gunicorn as an unprivileged user and has a health check on `/health`. The CI workflow builds the image and smoke-tests the running container (`/health` and a real `/analyze` call) on every push.
 
 ## Running the tests
 
