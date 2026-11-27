@@ -114,6 +114,8 @@ Other endpoints: `GET /health` returns `{"status": "ok"}` and is never rate limi
 
 ## Running locally
 
+Requires Python 3.12 or newer (the pinned numpy needs it).
+
 ```bash
 git clone https://github.com/khushi-solanki09/AI_code_Analyzer.git
 cd AI_code_Analyzer
@@ -141,7 +143,7 @@ python -m pytest
 ruff check .
 ```
 
-The suite has 255 tests. Every rule has at least one test where it fires and one where it stays quiet, plus tests for the rule file validation, the parsers' fallbacks, the `/analyze` endpoint, rate limiting and logging. GitHub Actions (`.github/workflows/ci.yml`) runs lint and tests on Python 3.11 to 3.13 and builds the Docker image.
+The suite has 255 tests. Every rule has at least one test where it fires and one where it stays quiet, plus tests for the rule file validation, the parsers' fallbacks, the `/analyze` endpoint, rate limiting and logging. GitHub Actions (`.github/workflows/ci.yml`) runs lint and tests on Python 3.12 and 3.13 and builds the Docker image.
 
 ## Project layout
 

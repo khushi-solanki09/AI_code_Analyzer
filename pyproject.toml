@@ -1,6 +1,6 @@
 [tool.ruff]
 line-length = 130
-target-version = "py311"
+target-version = "py312"
 extend-exclude = ["static", "templates"]
 
 [tool.ruff.lint]
