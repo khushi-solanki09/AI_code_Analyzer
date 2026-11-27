@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      ANALYZE_RATE_LIMIT: "30 per minute;500 per day"
+      LOG_LEVEL: INFO
+      # Set to 1 only when a reverse proxy sits in front of the container.
+      # TRUST_PROXY: "1"
+    restart: unless-stopped

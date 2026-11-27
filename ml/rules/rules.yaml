@@ -1,0 +1,1098 @@
+# Rule configuration for the bug detector. Loaded and validated by ml/rule_loader.py.
+#
+# Per rule: id, severity (HIGH/MEDIUM/LOW), category, message, fix, and `languages`.
+# Each language lists how the rule is detected:
+#   ast         Python structural check (name + parameters, see ml/python_ast.py)
+#   query       tree-sitter query for javascript/java/cpp; mark the offending node @hit
+#   sql         sqlparse check for sql (see ml/sql_engine.py)
+#   regex       regular expression; used on its own, or as the fallback when the code
+#               cannot be parsed (view: masked | code | comments, flags, multiline)
+#   text_check  named line-based check, used as a fallback
+# To add a rule: append an entry here and a test in tests/. No Python changes needed
+# unless it needs a new named check.
+
+version: 1
+rules:
+  - id: 1
+    severity: HIGH
+    category: Security
+    message: eval() is dangerous — can execute any code injected by user!
+    fix: Remove eval(). Use ast.literal_eval() in Python or JSON.parse() in JavaScript.
+    languages:
+      javascript:
+        query: |
+          (call_expression function: (identifier) @hit (#eq? @hit "eval"))
+        regex: (?<![\w.])eval\s*\(
+      python:
+        ast:
+          check: calls
+          names:
+          - eval
+        regex: (?<![\w.])eval\s*\(
+  - id: 2
+    severity: HIGH
+    category: Security
+    message: exec() is a serious security risk — executes arbitrary code!
+    fix: Remove exec(). Use proper function calls or logic instead.
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - exec
+        regex: (?<![\w.])exec\s*\(
+  - id: 3
+    severity: HIGH
+    category: Security
+    message: Hardcoded password detected — never store passwords in code!
+    fix: 'Use environment variables: import os; password = os.environ.get(''PASSWORD'')'
+    languages:
+      cpp:
+        query: |
+          (init_declarator declarator: [(identifier) @n (array_declarator declarator: (identifier) @n)] value: (string_literal (string_content)) (#match? @n "(?i)password|passwd|pwd")) @hit
+          (assignment_expression left: (identifier) @n right: (string_literal (string_content)) (#match? @n "(?i)password|passwd|pwd")) @hit
+        regex: (?<![\"'\w])\w*(?:password|passwd|pwd)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:password|passwd|pwd)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      java:
+        query: |
+          (variable_declarator name: (identifier) @n value: (string_literal (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+          (assignment_expression left: (identifier) @n right: (string_literal (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+        regex: (?<![\"'\w])\w*(?:password|passwd|pwd)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:password|passwd|pwd)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      javascript:
+        query: |
+          (variable_declarator name: (identifier) @n value: (string (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+          (assignment_expression left: (identifier) @n right: (string (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+          (assignment_expression left: (member_expression property: (property_identifier) @n) right: (string (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+          (pair key: (property_identifier) @n value: (string (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+          (pair key: (string (string_fragment) @n) value: (string (string_fragment)) (#match? @n "(?i)password|passwd|pwd")) @hit
+        regex: (?<![\"'\w])\w*(?:password|passwd|pwd)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:password|passwd|pwd)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      python:
+        ast:
+          check: hardcoded_secret
+          pattern: (?i)password|passwd|pwd
+        regex: (?<![\"'\w])\w*(?:password|passwd|pwd)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:password|passwd|pwd)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      sql:
+        regex: (?<![\"'\w])\w*(?:password|passwd|pwd)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:password|passwd|pwd)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+  - id: 4
+    severity: HIGH
+    category: Security
+    message: Hardcoded secret detected — store secrets in environment variables!
+    fix: 'Use: import os; secret = os.environ.get(''SECRET_KEY'')'
+    languages:
+      cpp:
+        query: |
+          (init_declarator declarator: [(identifier) @n (array_declarator declarator: (identifier) @n)] value: (string_literal (string_content)) (#match? @n "(?i)secret|private_?key")) @hit
+          (assignment_expression left: (identifier) @n right: (string_literal (string_content)) (#match? @n "(?i)secret|private_?key")) @hit
+        regex: (?<![\"'\w])\w*(?:secret|private_?key)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:secret|private_?key)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      java:
+        query: |
+          (variable_declarator name: (identifier) @n value: (string_literal (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+          (assignment_expression left: (identifier) @n right: (string_literal (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+        regex: (?<![\"'\w])\w*(?:secret|private_?key)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:secret|private_?key)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      javascript:
+        query: |
+          (variable_declarator name: (identifier) @n value: (string (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+          (assignment_expression left: (identifier) @n right: (string (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+          (assignment_expression left: (member_expression property: (property_identifier) @n) right: (string (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+          (pair key: (property_identifier) @n value: (string (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+          (pair key: (string (string_fragment) @n) value: (string (string_fragment)) (#match? @n "(?i)secret|private_?key")) @hit
+        regex: (?<![\"'\w])\w*(?:secret|private_?key)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:secret|private_?key)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      python:
+        ast:
+          check: hardcoded_secret
+          pattern: (?i)secret|private_?key
+        regex: (?<![\"'\w])\w*(?:secret|private_?key)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:secret|private_?key)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      sql:
+        regex: (?<![\"'\w])\w*(?:secret|private_?key)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:secret|private_?key)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+  - id: 5
+    severity: HIGH
+    category: Security
+    message: Hardcoded API key or token in code — this is a security vulnerability!
+    fix: 'Use: api_key = os.environ.get(''API_KEY'') and keep the value in a .env file'
+    languages:
+      cpp:
+        query: |
+          (init_declarator declarator: [(identifier) @n (array_declarator declarator: (identifier) @n)] value: (string_literal (string_content)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+          (assignment_expression left: (identifier) @n right: (string_literal (string_content)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+        regex: (?<![\"'\w])\w*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      java:
+        query: |
+          (variable_declarator name: (identifier) @n value: (string_literal (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+          (assignment_expression left: (identifier) @n right: (string_literal (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+        regex: (?<![\"'\w])\w*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      javascript:
+        query: |
+          (variable_declarator name: (identifier) @n value: (string (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+          (assignment_expression left: (identifier) @n right: (string (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+          (assignment_expression left: (member_expression property: (property_identifier) @n) right: (string (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+          (pair key: (property_identifier) @n value: (string (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+          (pair key: (string (string_fragment) @n) value: (string (string_fragment)) (#match? @n "(?i)api[_-]?key|access_?token|auth_?token|bearer_?token")) @hit
+        regex: (?<![\"'\w])\w*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      python:
+        ast:
+          check: hardcoded_secret
+          pattern: (?i)api[_-]?key|access_?token|auth_?token|bearer_?token
+        regex: (?<![\"'\w])\w*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+      sql:
+        regex: (?<![\"'\w])\w*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)\w*\s*(?:\[\s*\d*\s*\])?\s*[:=]\s*[\"'][^\"'\n]+[\"']|[\"'][\w-]*(?:api[_-]?key|access_?token|auth_?token|bearer_?token)[\w-]*[\"']\s*:\s*[\"'][^\"'\n]+[\"']
+        flags:
+        - IGNORECASE
+        view: code
+  - id: 6
+    severity: HIGH
+    category: Security
+    message: pickle.load() can execute malicious code from untrusted files!
+    fix: Use json.load() for safe data loading instead of pickle.
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - pickle.load
+          - pickle.loads
+          - cPickle.load
+          - cPickle.loads
+        regex: \bpickle\.loads?\s*\(
+  - id: 7
+    severity: HIGH
+    category: Security
+    message: subprocess with shell=True allows command injection attacks!
+    fix: 'Use shell=False and pass the command as a list: subprocess.run([''ls'', ''-la''])'
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - subprocess.run
+          - subprocess.call
+          - subprocess.Popen
+          - subprocess.check_output
+          - subprocess.check_call
+          keywords:
+            shell: true
+        regex: \bshell\s*=\s*True\b
+  - id: 8
+    severity: HIGH
+    category: Security
+    message: Dynamic import with __import__() can be a security risk!
+    fix: Use importlib.import_module() or regular static imports instead.
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - __import__
+        regex: (?<![\w.])__import__\s*\(
+  - id: 9
+    severity: MEDIUM
+    category: Bug
+    message: 'Bare except: catches everything including system exits — too broad!'
+    fix: 'Catch specific exceptions: except ValueError: or except TypeError:'
+    languages:
+      python:
+        ast:
+          check: bare_except
+        regex: '^\s*except\s*:'
+  - id: 10
+    severity: LOW
+    category: Bug
+    message: Too broad exception — catches almost every error, hides real bugs
+    fix: 'Catch the specific exception you expect, e.g. except ZeroDivisionError:'
+    languages:
+      python:
+        ast:
+          check: broad_except
+        regex: '^\s*except\s+Exception\s*(?:as\s+\w+)?\s*:'
+  - id: 11
+    severity: MEDIUM
+    category: Bug
+    message: File opened without 'with' — file may not close properly on error!
+    fix: 'Use: with open(''file.txt'', ''r'') as f:  — this closes the file automatically'
+    languages:
+      python:
+        ast:
+          check: open_without_with
+        regex: ^(?!\s*(?:async\s+)?(?:with|def)\b).*?(?<![\w.])open\s*\(
+  - id: 12
+    severity: MEDIUM
+    category: Best Practice
+    message: Global variable usage — makes code hard to test and debug
+    fix: Pass the variable as a function parameter instead of using global.
+    languages:
+      python:
+        ast:
+          check: global_statement
+        regex: ^\s*global\s+\w
+  - id: 13
+    severity: MEDIUM
+    category: Bug
+    message: Infinite loop with no break, return or raise — it will never stop!
+    fix: 'Add a break condition or use a proper loop condition: while count < limit:'
+    languages:
+      python:
+        ast:
+          check: infinite_loop
+        regex: '^\s*while\s+(?:True|1)\s*:'
+        needs_no_exit: true
+  - id: 14
+    severity: MEDIUM
+    category: Performance
+    message: time.sleep() blocks the entire program — bad for performance!
+    fix: Consider async/await or threading for non-blocking delays.
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - time.sleep
+        regex: \btime\.sleep\s*\(
+  - id: 15
+    severity: MEDIUM
+    category: Bug
+    message: assert is disabled in optimized Python (-O flag) — not safe for validation!
+    fix: 'Use: if not condition: raise ValueError(''message'') instead of assert'
+    languages:
+      python:
+        ast:
+          check: assert_statement
+        regex: ^\s*assert\b
+  - id: 16
+    severity: MEDIUM
+    category: Best Practice
+    message: Wildcard import pollutes the namespace and causes name conflicts!
+    fix: 'Import only what you need: from math import sqrt, pi'
+    languages:
+      java:
+        query: |
+          (import_declaration (asterisk)) @hit
+        regex: ^\s*import\s+(?:static\s+)?[\w.]+\.\*\s*;
+      python:
+        ast:
+          check: wildcard_import
+        regex: ^\s*from\s+[\w.]+\s+import\s+\*
+  - id: 17
+    severity: MEDIUM
+    category: Security
+    message: User input used directly — always validate before processing!
+    fix: 'Validate input: val = input(''Enter: ''); if not val.isdigit(): raise ValueError'
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - input
+          not_parent_names:
+          - int
+          - float
+        regex: (?<![\w.])(?<!int\()(?<!float\()input\s*\(
+  - id: 18
+    severity: HIGH
+    category: Bug
+    message: Division by zero detected — this will crash your program!
+    fix: 'Add a check: if divisor != 0: result = num / divisor'
+    languages:
+      cpp:
+        query: |
+          (binary_expression operator: "/" right: (number_literal) @hit (#match? @hit "^0$"))
+        regex: '[\w)\]]\s*//?\s*0(?:\.0*)?(?![\w.])'
+      java:
+        query: |
+          (binary_expression operator: "/" right: (decimal_integer_literal) @hit (#eq? @hit "0"))
+        regex: '[\w)\]]\s*//?\s*0(?:\.0*)?(?![\w.])'
+      javascript:
+        query: |
+          (binary_expression operator: "/" right: (number) @hit (#match? @hit "^0([.]0*)?$"))
+        regex: '[\w)\]]\s*//?\s*0(?:\.0*)?(?![\w.])'
+      python:
+        ast:
+          check: divide_by_zero
+        regex: '[\w)\]]\s*//?\s*0(?:\.0*)?(?![\w.])'
+      sql:
+        regex: '[\w)\]]\s*//?\s*0(?:\.0*)?(?![\w.])'
+  - id: 19
+    severity: MEDIUM
+    category: Bug
+    message: Direct int(input()) will crash if the user types a non-number!
+    fix: 'Wrap in try-except: try: val = int(input(''Enter: '')) except ValueError: print(''Not a number!'')'
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - input
+          parent_names:
+          - int
+        regex: \bint\s*\(\s*input\s*\(
+  - id: 20
+    severity: MEDIUM
+    category: Bug
+    message: Direct float(input()) crashes on non-numeric input!
+    fix: 'Wrap in try-except: try: val = float(input()) except ValueError: ...'
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - input
+          parent_names:
+          - float
+        regex: \bfloat\s*\(\s*input\s*\(
+  - id: 21
+    severity: LOW
+    category: Best Practice
+    message: Comparing to None with ==/!= — use an identity check instead
+    fix: Replace 'x == None' with 'x is None' (and '!=' with 'is not')
+    languages:
+      python:
+        ast:
+          check: compare_constant
+          value: none
+        regex: '[=!]=\s*None\b'
+  - id: 22
+    severity: LOW
+    category: Best Practice
+    message: Comparing to True with ==/!= is redundant — use the boolean value directly
+    fix: Replace 'if x == True:' with 'if x:'
+    languages:
+      python:
+        ast:
+          check: compare_constant
+          value: 'true'
+        regex: '[=!]=\s*True\b'
+  - id: 23
+    severity: LOW
+    category: Best Practice
+    message: Comparing to False with ==/!= is redundant — use 'not' instead
+    fix: Replace 'if x == False:' with 'if not x:'
+    languages:
+      python:
+        ast:
+          check: compare_constant
+          value: 'false'
+        regex: '[=!]=\s*False\b'
+  - id: 24
+    severity: LOW
+    category: Best Practice
+    message: print() in code — use the logging module for production output
+    fix: 'Use: import logging; logging.info(''message'') instead of print()'
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - print
+        regex: (?<![\w.])print\s*\(
+  - id: 25
+    severity: LOW
+    category: Code Quality
+    message: TODO/FIXME comment found — incomplete code!
+    fix: Complete the TODO before submitting or deploying code.
+    languages:
+      cpp:
+        regex: \b(?:TODO|FIXME|XXX)\b
+        view: comments
+      java:
+        regex: \b(?:TODO|FIXME|XXX)\b
+        view: comments
+      javascript:
+        regex: \b(?:TODO|FIXME|XXX)\b
+        view: comments
+      python:
+        regex: \b(?:TODO|FIXME|XXX)\b
+        view: comments
+      sql:
+        regex: \b(?:TODO|FIXME|XXX)\b
+        view: comments
+  - id: 26
+    severity: LOW
+    category: Code Quality
+    message: Empty 'pass' block — is this intentional? Empty blocks can hide bugs
+    fix: Add proper logic or raise NotImplementedError('Not implemented yet')
+    languages:
+      python:
+        ast:
+          check: empty_block
+        regex: (?:^|:)\s*pass\s*$
+  - id: 27
+    severity: LOW
+    category: Best Practice
+    message: range(len(list)) is not Pythonic — use enumerate() instead
+    fix: 'Replace with: for i, item in enumerate(my_list):'
+    languages:
+      python:
+        ast:
+          check: range_len
+        regex: \brange\s*\(\s*len\s*\(
+  - id: 28
+    severity: LOW
+    category: Best Practice
+    message: Use the shorthand operator — x += 1 is cleaner
+    fix: Replace 'x = x + 1' with 'x += 1'
+    languages:
+      cpp:
+        query: |
+          (assignment_expression left: (identifier) @l right: (binary_expression left: (identifier) @l2 operator: ["+" "-"] right: (number_literal)) (#eq? @l @l2)) @hit
+        regex: \b([A-Za-z_]\w*)\s*=\s*\1\s*\+\s*\d+\s*;?\s*$
+      java:
+        query: |
+          (assignment_expression left: (identifier) @l right: (binary_expression left: (identifier) @l2 operator: ["+" "-"] right: (decimal_integer_literal)) (#eq? @l @l2)) @hit
+        regex: \b([A-Za-z_]\w*)\s*=\s*\1\s*\+\s*\d+\s*;?\s*$
+      javascript:
+        query: |
+          (assignment_expression left: (identifier) @l right: (binary_expression left: (identifier) @l2 operator: ["+" "-"] right: (number)) (#eq? @l @l2)) @hit
+        regex: \b([A-Za-z_]\w*)\s*=\s*\1\s*\+\s*\d+\s*;?\s*$
+      python:
+        ast:
+          check: shorthand_operator
+        regex: \b([A-Za-z_]\w*)\s*=\s*\1\s*\+\s*\d+\s*;?\s*$
+  - id: 29
+    severity: LOW
+    category: Best Practice
+    message: Avoid 'if len(x) > 0' — in Python just use 'if x:'
+    fix: Replace 'if len(my_list) > 0:' with 'if my_list:'
+    languages:
+      python:
+        ast:
+          check: len_compare
+        regex: '^\s*(?:el)?if\s+(?:not\s+)?len\s*\(\s*\w+\s*\)\s*(?:>\s*0|==\s*0|!=\s*0|>=\s*1)\s*:'
+  - id: 30
+    severity: LOW
+    category: Best Practice
+    message: Using type() for a type check — use isinstance() instead
+    fix: Replace 'type(x) == int' with 'isinstance(x, int)' — it supports inheritance too
+    languages:
+      python:
+        ast:
+          check: type_compare
+        regex: \btype\s*\([^)]*\)\s*[=!]=
+  - id: 31
+    severity: LOW
+    category: Performance
+    message: Building strings with + str(...) is clumsy and slow — use f-strings
+    fix: 'Use an f-string: f''Hello {name}'' instead of ''Hello '' + str(name)'
+    languages:
+      python:
+        ast:
+          check: str_concat
+        regex: \+\s*str\s*\(|\bstr\s*\([^()]*\)\s*\+
+  - id: 32
+    severity: LOW
+    category: Performance
+    message: append() inside a loop — a list comprehension is usually faster and shorter
+    fix: 'Use a list comprehension: result = [process(x) for x in items]'
+    languages:
+      python:
+        ast:
+          check: append_in_loop
+        regex: \.append\s*\(
+        in_loop: true
+  - id: 33
+    severity: LOW
+    category: Performance
+    message: Membership test on range() is O(n) — a direct comparison is O(1)
+    fix: Replace 'x in range(0, 100)' with '0 <= x < 100'
+    languages:
+      python:
+        ast:
+          check: range_membership
+        regex: \bnot\s+in\s+range\s*\(|^\s*(?:el)?if\b[^:]*\bin\s+range\s*\(
+  - id: 34
+    severity: MEDIUM
+    category: Performance
+    message: Double sorting detected — unnecessary duplicate operation!
+    fix: 'Sort only once with the right key: sorted(data, key=lambda x: x[''name''])'
+    languages:
+      python:
+        ast:
+          check: nested_sorted
+        regex: \bsorted\s*\(\s*sorted\s*\(
+  - id: 35
+    severity: LOW
+    category: Performance
+    message: dict() constructor is slower than the {} literal
+    fix: Replace dict() with {} for an empty dict.
+    languages:
+      python:
+        ast:
+          check: calls
+          names:
+          - dict
+          no_args: true
+        regex: (?<![\w.])dict\s*\(\s*\)
+  - id: 36
+    severity: LOW
+    category: Code Quality
+    message: Generic function name 'function' — use a descriptive name!
+    fix: 'Name functions by what they do: def calculate_sum() or def get_user_data()'
+    languages:
+      python:
+        ast:
+          check: function_name
+          name: function
+        regex: \bdef\s+function\s*\(
+  - id: 37
+    severity: HIGH
+    category: Bug
+    message: Index out of range! The last valid index is len-1, not len
+    fix: Use lst[-1] (Python) or arr[arr.length - 1] to get the last element safely
+    languages:
+      java:
+        query: |
+          (array_access array: (identifier) @o index: (field_access object: (identifier) @o2 field: (identifier) @p) (#eq? @o @o2) (#eq? @p "length")) @hit
+        regex: \b(\w+)\s*\[\s*\1\.length\s*\]
+      javascript:
+        query: |
+          (subscript_expression object: (identifier) @o index: (member_expression object: (identifier) @o2 property: (property_identifier) @p) (#eq? @o @o2) (#eq? @p "length")) @hit
+        regex: \b(\w+)\s*\[\s*\1\.length\s*\]
+      python:
+        ast:
+          check: index_len
+        regex: \b(\w+)\s*\[\s*len\s*\(\s*\1\s*\)\s*\]
+  - id: 38
+    severity: HIGH
+    category: Bug
+    message: Double self.self — this is a logic error in a class!
+    fix: Use just self.attribute, not self.self.attribute
+    languages:
+      python:
+        ast:
+          check: self_self
+        regex: \bself\.self\.
+  - id: 39
+    severity: LOW
+    category: Bug
+    message: Recursion stops only at n == 0 — a negative input recurses forever (RecursionError)
+    fix: 'Also handle n < 0: raise ValueError for negative input before recursing'
+    languages:
+      python:
+        ast:
+          check: missing_negative_guard
+        text_check: missing_negative_guard
+  - id: 40
+    severity: MEDIUM
+    category: Bug
+    message: Variable name shadows a Python built-in function (sum, max, min, len, input, id, type, ...)
+    fix: 'Use a more specific name: total, largest, smallest, item_count, ...'
+    languages:
+      python:
+        ast:
+          check: shadow_builtin
+          names:
+          - sum
+          - max
+          - min
+          - len
+          - input
+          - id
+          - type
+          - sorted
+          - map
+          - filter
+          - any
+          - all
+          - abs
+          - round
+          - next
+          - iter
+          - format
+          - zip
+          - range
+        regex: ^\s*(?:sum|max|min|len|input|id|type|sorted|map|filter|any|all|abs|round|next|iter|format|zip|range)\s*=(?!=)
+  - id: 41
+    severity: MEDIUM
+    category: Bug
+    message: Variable name shadows a Python built-in type (dict, set, tuple, int, float, bool, ...)
+    fix: 'Use a specific name: user_dict, id_set, point_tuple, count, ...'
+    languages:
+      python:
+        ast:
+          check: shadow_builtin
+          names:
+          - dict
+          - set
+          - tuple
+          - int
+          - float
+          - bool
+          - bytes
+          - frozenset
+        regex: ^\s*(?:dict|set|tuple|int|float|bool|bytes|frozenset)\s*=(?!=)
+  - id: 42
+    severity: HIGH
+    category: Bug
+    message: Shadowing built-in 'str' — breaks every str() call in this scope!
+    fix: 'Use a different variable name: name_str, text_value, etc.'
+    languages:
+      python:
+        ast:
+          check: shadow_builtin
+          names:
+          - str
+        regex: ^\s*str\s*=(?!=)
+  - id: 43
+    severity: HIGH
+    category: Bug
+    message: Shadowing built-in 'list' — breaks every list() call in this scope!
+    fix: 'Use a different variable name: my_items, data_list, etc.'
+    languages:
+      python:
+        ast:
+          check: shadow_builtin
+          names:
+          - list
+        regex: ^\s*list\s*=(?!=)
+  - id: 44
+    severity: HIGH
+    category: Bug
+    message: Incorrect __init__ signature — self should not appear twice!
+    fix: 'Correct form: def __init__(self, param1, param2):'
+    languages:
+      python:
+        regex: \bdef\s+__init__\s*\(\s*self\s*,\s*self\b
+  - id: 45
+    severity: MEDIUM
+    category: Bug
+    message: '''elif True:'' is always true — use ''else:'' instead'
+    fix: Replace 'elif True:' with 'else:'
+    languages:
+      python:
+        ast:
+          check: elif_true
+        regex: '^\s*elif\s+True\s*:'
+  - id: 46
+    severity: HIGH
+    category: Bug
+    message: Assignment '=' inside an if condition — use '==' for comparison!
+    fix: Change 'if x = value' to 'if x == value'
+    languages:
+      cpp:
+        query: |
+          (if_statement condition: (condition_clause value: (assignment_expression) @hit))
+        regex: \bif\s*\(?\s*[\w.\[\]]+\s*=(?![=>])
+      java:
+        query: |
+          (if_statement condition: (parenthesized_expression (assignment_expression) @hit))
+        regex: \bif\s*\(?\s*[\w.\[\]]+\s*=(?![=>])
+      javascript:
+        query: |
+          (if_statement condition: (parenthesized_expression (assignment_expression) @hit))
+        regex: \bif\s*\(?\s*[\w.\[\]]+\s*=(?![=>])
+      python:
+        regex: \bif\s*\(?\s*[\w.\[\]]+\s*=(?![=>])
+  - id: 47
+    severity: MEDIUM
+    category: Bug
+    message: Silently continuing after an exception — the error is hidden from the user!
+    fix: 'Log the error before continuing: logging.warning(f''Skipping: {e}'')'
+    languages:
+      python:
+        ast:
+          check: except_body
+          statement: continue
+        regex: ^[ \t]*(?P<at>except\b[^\n:]*):\s*continue\b
+        multiline: true
+  - id: 48
+    severity: LOW
+    category: Best Practice
+    message: Multiple imports on one line — put each on its own line (PEP 8)
+    fix: 'One import per line: import os (newline) import sys'
+    languages:
+      python:
+        ast:
+          check: multi_import
+        regex: ^\s*import\s+[\w.]+\s*,\s*[\w.]+
+  - id: 49
+    severity: LOW
+    category: Best Practice
+    message: Returning True/False separately — return the condition directly
+    fix: 'Simplify: return condition  instead of  if condition: return True / return False'
+    languages:
+      python:
+        ast:
+          check: return_bool
+        regex: ^[ \t]*(?P<at>return\s+True)[ \t]*\n\s*(?:else\s*:\s*)?return\s+False\b
+        multiline: true
+  - id: 50
+    severity: MEDIUM
+    category: Bug
+    message: Exception silently swallowed with 'pass' — errors disappear without a trace!
+    fix: 'Handle or log the error: except ValueError as e: logging.error(e)'
+    languages:
+      python:
+        ast:
+          check: except_body
+          statement: pass
+        regex: ^[ \t]*(?P<at>except\b[^\n:]*):\s*pass\b
+        multiline: true
+  - id: 51
+    severity: MEDIUM
+    category: Bug
+    message: Empty catch block — the error is swallowed and nobody will ever know!
+    fix: Log or handle the exception inside the catch block.
+    languages:
+      cpp:
+        query: |
+          (catch_clause body: (compound_statement) @hit (#match? @hit "(?s)^\\{(?:\\s|//[^\\n]*|/\\*.*?\\*/)*\\}$"))
+        regex: \bcatch\s*(?:\([^)]*\))?\s*\{\s*\}
+        multiline: true
+      java:
+        query: |
+          (catch_clause body: (block) @hit (#match? @hit "(?s)^\\{(?:\\s|//[^\\n]*|/\\*.*?\\*/)*\\}$"))
+        regex: \bcatch\s*(?:\([^)]*\))?\s*\{\s*\}
+        multiline: true
+      javascript:
+        query: |
+          (catch_clause body: (statement_block) @hit (#match? @hit "(?s)^\\{(?:\\s|//[^\\n]*|/\\*.*?\\*/)*\\}$"))
+        regex: \bcatch\s*(?:\([^)]*\))?\s*\{\s*\}
+        multiline: true
+  - id: 52
+    severity: LOW
+    category: Best Practice
+    message: '''var'' has function scope and hoisting surprises — use let or const'
+    fix: Replace 'var' with 'const' (or 'let' if the value changes).
+    languages:
+      javascript:
+        query: |
+          (variable_declaration) @hit
+        regex: ^\s*var\s+\w
+  - id: 53
+    severity: LOW
+    category: Best Practice
+    message: Loose equality (==, !=) performs type coercion — use strict equality
+    fix: Use === and !== instead of == and !=.
+    languages:
+      javascript:
+        query: |
+          (binary_expression operator: ["==" "!="] @hit)
+        regex: (?<![=!<>])(?:==|!=)(?!=)
+  - id: 54
+    severity: LOW
+    category: Best Practice
+    message: console.log() left in code — remove it or use a proper logger
+    fix: Remove debug output before shipping, or use a logging library.
+    languages:
+      javascript:
+        query: |
+          (call_expression function: (member_expression object: (identifier) @o property: (property_identifier) @p) (#eq? @o "console") (#match? @p "^(log|debug)$")) @hit
+        regex: \bconsole\.(?:log|debug)\s*\(
+  - id: 55
+    severity: HIGH
+    category: Security
+    message: Assigning to innerHTML can inject scripts (XSS)!
+    fix: Use textContent for plain text, or sanitize the HTML first.
+    languages:
+      javascript:
+        query: |
+          (assignment_expression left: (member_expression property: (property_identifier) @p) (#match? @p "^(inner|outer)HTML$")) @hit
+          (augmented_assignment_expression left: (member_expression property: (property_identifier) @p) (#match? @p "^(inner|outer)HTML$")) @hit
+        regex: \.(?:inner|outer)HTML\s*\+?=
+  - id: 56
+    severity: MEDIUM
+    category: Security
+    message: document.write() is unsafe and blocks page rendering
+    fix: Build elements with the DOM API (createElement / appendChild).
+    languages:
+      javascript:
+        query: |
+          (call_expression function: (member_expression object: (identifier) @o property: (property_identifier) @p) (#eq? @o "document") (#match? @p "^write(ln)?$")) @hit
+        regex: \bdocument\.write(?:ln)?\s*\(
+  - id: 57
+    severity: LOW
+    category: Best Practice
+    message: System.out.print in code — use a logger instead
+    fix: 'Use java.util.logging or SLF4J: logger.info(...)'
+    languages:
+      java:
+        query: |
+          (method_invocation object: (field_access object: (identifier) @a field: (identifier) @b) name: (identifier) @m (#eq? @a "System") (#match? @b "^(out|err)$") (#match? @m "^print")) @hit
+        regex: \bSystem\.out\.print(?:ln|f)?\s*\(
+  - id: 58
+    severity: LOW
+    category: Best Practice
+    message: printStackTrace() writes to stderr and hides context — log the exception
+    fix: Use logger.error("message", e) instead.
+    languages:
+      java:
+        query: |
+          (method_invocation name: (identifier) @hit (#eq? @hit "printStackTrace"))
+        regex: \.printStackTrace\s*\(\s*\)
+  - id: 59
+    severity: LOW
+    category: Bug
+    message: Catching Exception/Throwable (or ...) is too broad — it hides real bugs
+    fix: Catch the specific exception types you can actually handle.
+    languages:
+      cpp:
+        query: |
+          (catch_clause parameters: (parameter_list) @hit (#match? @hit "^\\(\\s*\\.\\.\\.\\s*\\)$"))
+        regex: \bcatch\s*\(\s*\.\.\.\s*\)
+      java:
+        query: |
+          (catch_clause (catch_formal_parameter (catch_type (type_identifier) @hit (#match? @hit "^(Exception|Throwable)$"))))
+        regex: \bcatch\s*\(\s*(?:final\s+)?(?:Exception|Throwable)\s+\w+\s*\)
+  - id: 60
+    severity: LOW
+    category: Best Practice
+    message: '''using namespace std;'' pollutes the global namespace'
+    fix: Qualify names (std::cout) or import only what you need.
+    languages:
+      cpp:
+        query: |
+          (using_declaration "namespace" (identifier) @n (#eq? @n "std")) @hit
+        regex: \busing\s+namespace\s+std\s*;
+  - id: 61
+    severity: HIGH
+    category: Security
+    message: Unsafe C string function — no bounds checking, classic buffer overflow!
+    fix: Use fgets / strncpy / snprintf, or std::string.
+    languages:
+      cpp:
+        query: |
+          (call_expression function: [(identifier) @f (qualified_identifier name: (identifier) @f)] (#match? @f "^(gets|strcpy|strcat|sprintf)$")) @hit
+        regex: (?<![\w.])(?:gets|strcpy|strcat|sprintf)\s*\(
+  - id: 62
+    severity: HIGH
+    category: Security
+    message: Running shell commands from code allows command injection!
+    fix: 'Avoid the shell: use subprocess with a list of arguments (Python) or a safe API.'
+    languages:
+      cpp:
+        query: |
+          (call_expression function: [(identifier) @f (qualified_identifier name: (identifier) @f)] (#eq? @f "system")) @hit
+        regex: (?<![\w.:>])system\s*\(
+      python:
+        ast:
+          check: calls
+          names:
+          - os.system
+        regex: \bos\.system\s*\(
+  - id: 63
+    severity: MEDIUM
+    category: Best Practice
+    message: Manual memory management (malloc / new[]) is easy to leak — use std::vector or smart pointers
+    fix: Use std::vector<T> or std::unique_ptr<T[]> so memory is freed automatically.
+    languages:
+      cpp:
+        query: |
+          (call_expression function: (identifier) @f (#match? @f "^(malloc|calloc)$")) @hit
+          (new_expression declarator: (new_declarator)) @hit
+        regex: (?<![\w.])(?:malloc|calloc)\s*\(|\bnew\s+[\w:]+\s*\[
+  - id: 64
+    severity: LOW
+    category: Performance
+    message: SELECT * reads every column — list only the columns you need
+    fix: 'Write the column names: SELECT id, name FROM ...'
+    languages:
+      sql:
+        sql:
+          check: select_star
+        regex: \bSELECT\s+(?:DISTINCT\s+)?\*
+        flags:
+        - IGNORECASE
+  - id: 65
+    severity: HIGH
+    category: Bug
+    message: Destructive statement (DROP) — this permanently deletes data!
+    fix: Back up first, run in a transaction, and never run DROP from application code.
+    languages:
+      sql:
+        sql:
+          check: drop_statement
+        regex: \bDROP\s+(?:TABLE|DATABASE|SCHEMA)\b
+        flags:
+        - IGNORECASE
+  - id: 66
+    severity: HIGH
+    category: Bug
+    message: UPDATE/DELETE without a WHERE clause changes every row in the table!
+    fix: Add a WHERE clause (and test it with a SELECT first).
+    languages:
+      sql:
+        sql:
+          check: missing_where
+  - id: 67
+    severity: HIGH
+    category: Security
+    message: SQL query built by joining strings — vulnerable to SQL injection!
+    fix: 'Use parameterized queries: cursor.execute(''... WHERE id = %s'', (user_id,))'
+    languages:
+      java:
+        query: |
+          (binary_expression left: (string_literal) @s operator: "+" (#match? @s "(?is)select\\b.*?\\bfrom\\b|insert\\s+into\\b|update\\s+\\w+\\s+set\\b|delete\\s+from\\b")) @hit
+        regex: \"\s*(?:select\b.*?\bfrom\b|insert\s+into\b|update\s+\w+\s+set\b|delete\s+from\b)[^\"\n]*\"\s*\+
+        flags:
+        - IGNORECASE
+        view: code
+      javascript:
+        query: |
+          (binary_expression left: (string) @s operator: "+" (#match? @s "(?is)select\\b.*?\\bfrom\\b|insert\\s+into\\b|update\\s+\\w+\\s+set\\b|delete\\s+from\\b")) @hit
+          (template_string (template_substitution)) @hit (#match? @hit "(?is)select\\b.*?\\bfrom\\b|insert\\s+into\\b|update\\s+\\w+\\s+set\\b|delete\\s+from\\b")
+        regex: '[\"'']\s*(?:select\b.*?\bfrom\b|insert\s+into\b|update\s+\w+\s+set\b|delete\s+from\b)[^\"''\n]*[\"'']\s*\+|`\s*(?:select\b.*?\bfrom\b|insert\s+into\b|update\s+\w+\s+set\b|delete\s+from\b)[^`\n]*\$\{'
+        flags:
+        - IGNORECASE
+        view: code
+      python:
+        ast:
+          check: sql_string_building
+        regex: \"\s*(?:select\b.*?\bfrom\b|insert\s+into\b|update\s+\w+\s+set\b|delete\s+from\b)[^\"\n]*\"\s*(?:\+|%|\.format\s*\()|'\s*(?:select\b.*?\bfrom\b|insert\s+into\b|update\s+\w+\s+set\b|delete\s+from\b)[^'\n]*'\s*(?:\+|%|\.format\s*\()|\bf[\"']\s*(?:select\b.*?\bfrom\b|insert\s+into\b|update\s+\w+\s+set\b|delete\s+from\b)[^\n]*\{
+        flags:
+        - IGNORECASE
+        view: code
+  - id: 68
+    severity: MEDIUM
+    category: Bug
+    message: Mutable default argument — the same list/dict is shared between calls!
+    fix: Use None as the default and create the object inside the function.
+    languages:
+      python:
+        ast:
+          check: mutable_default
+        regex: \bdef\s+\w+\s*\([^)]*=\s*(?:\[\s*\]|\{\s*\}|set\s*\(\s*\)|list\s*\(\s*\)|dict\s*\(\s*\))
+  - id: 69
+    severity: LOW
+    category: Bug
+    message: Unreachable code — nothing after return/raise/break/continue can run
+    fix: Delete the dead lines or move them before the return.
+    languages:
+      python:
+        ast:
+          check: unreachable
+        text_check: unreachable
+  - id: 70
+    severity: LOW
+    category: Code Quality
+    message: Imported but never used — remove the import or use it
+    fix: Delete the unused import line.
+    languages:
+      python:
+        ast:
+          check: unused_import
+  - id: 71
+    severity: LOW
+    category: Code Quality
+    message: Local variable is assigned but never used
+    fix: Remove the variable, or use its value (prefix with _ if it is intentional).
+    languages:
+      python:
+        ast:
+          check: unused_variable
+  - id: 72
+    severity: LOW
+    category: Code Quality
+    message: Function has too many parameters (more than 6) — hard to call and test
+    fix: Group related parameters into an object or dataclass.
+    languages:
+      python:
+        ast:
+          check: too_many_parameters
+          limit: 6
+  - id: 73
+    severity: LOW
+    category: Code Quality
+    message: Function is very long (over 50 lines) — hard to read and test
+    fix: Split it into smaller functions that each do one thing.
+    languages:
+      python:
+        ast:
+          check: long_function
+          limit: 50
+  - id: 74
+    severity: HIGH
+    category: Bug
+    message: Syntax error — Python cannot parse this code
+    fix: Fix the syntax at the reported line; the other findings use pattern matching until it parses.
+    languages:
+      python:
+        generated: true
+  - id: 75
+    severity: HIGH
+    category: Bug
+    message: assert on a tuple is always true — the assertion never fails!
+    fix: 'Remove the parentheses: assert condition, ''message'''
+    languages:
+      python:
+        ast:
+          check: assert_tuple
+        regex: ^\s*assert\s*\(.*,.*\)\s*$
+  - id: 76
+    severity: MEDIUM
+    category: Bug
+    message: Comparing with 'is' to a string or number literal — use == instead
+    fix: Use == for values; reserve 'is' for None/True/False.
+    languages:
+      python:
+        ast:
+          check: is_literal
+        regex: \bis\s+(?:not\s+)?(?:\d|[\"'])
+  - id: 77
+    severity: MEDIUM
+    category: Bug
+    message: Duplicate key in a dict literal — the later value silently wins
+    fix: Remove or rename the duplicate key.
+    languages:
+      python:
+        ast:
+          check: duplicate_dict_keys
+  - id: 78
+    severity: HIGH
+    category: Bug
+    message: Comparing strings with == compares references, not content
+    fix: Use a.equals(b) (or Objects.equals(a, b)).
+    languages:
+      java:
+        query: |
+          (binary_expression left: (string_literal) operator: ["==" "!="]) @hit
+          (binary_expression operator: ["==" "!="] right: (string_literal)) @hit
+        regex: '[=!]=\s*\"|\"\s*[=!]='
+  - id: 79
+    severity: LOW
+    category: Performance
+    message: LIKE with a leading % cannot use an index — it scans the whole table
+    fix: Avoid a leading wildcard or use a full-text index.
+    languages:
+      sql:
+        regex: \bLIKE\s+['\"]%
+        view: code
+        flags:
+        - IGNORECASE

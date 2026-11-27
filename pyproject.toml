@@ -1,0 +1,13 @@
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+extend-exclude = ["static", "templates"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+# E741: single-letter names such as `l` appear in short comprehensions
+# E501: long lines are regexes and training samples; B905: zip() inputs here have equal length
+ignore = ["E741", "E501", "B905"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -349,7 +349,7 @@ def _brace_metrics(masked, lang):
 
     best = ONE
     max_depth = 0
-    for idx, (s, e, header, body) in enumerate(loops):
+    for idx, (s, e, _header, _body) in enumerate(loops):
         enclosing = [l for l in loops if l[0] < s and l[1] >= e]
         chain = enclosing + [loops[idx]]
         max_depth = max(max_depth, len(chain))
@@ -473,8 +473,8 @@ def analyze_complexity(code, language="Python"):
     if lang == "python":
         try:
             metrics = _python_metrics(code)
-        except SyntaxError:
-            metrics = None
+        except (SyntaxError, ValueError, RecursionError, MemoryError):
+            metrics = None  # does not parse, or is nested too deeply to walk
     if metrics is None:
         metrics = _brace_metrics(masked, lang) if lang != "python" else _python_fallback(masked)
 

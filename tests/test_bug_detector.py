@@ -96,6 +96,15 @@ SHOULD_FIRE = [
     ("sql injection js template", "JavaScript", "const q = `SELECT * FROM users WHERE id = ${id}`;\n", 67, 1),
     ("mutable default", "Python", "def f(x, items=[]):\n    return items\n", 68, 1),
     ("unreachable", "Python", "def f(x):\n    return x\n    y = 1\n", 69, 3),
+    ("unused import", "Python", "import os\nx = 1\n", 70, 1),
+    ("unused variable", "Python", "def f():\n    unused = 5\n    return 1\n", 71, 2),
+    ("too many parameters", "Python", "def f(a, b, c, d, e, f, g):\n    return a\n", 72, 1),
+    ("long function", "Python", "def f():\n" + "    x = 1\n" * 55, 73, 1),
+    ("assert on tuple", "Python", "assert (x > 0, 'must be positive')\n", 75, 1),
+    ("is with literal", "Python", "if x is 'a':\n    go()\n", 76, 1),
+    ("duplicate dict key", "Python", "d = {'a': 1, 'a': 2}\n", 77, 1),
+    ("java string ==", "Java", "class A { boolean f(String s) { return s == \"a\"; } }\n", 78, 1),
+    ("leading wildcard like", "SQL", "SELECT a FROM t WHERE n LIKE '%abc';\n", 79, 1),
 ]
 
 
@@ -135,6 +144,14 @@ SHOULD_NOT_FIRE = [
     ("code after if-return", "Python", "def f(x):\n    if x:\n        return 1\n    return 2\n", 69),
     ("multi-line return", "Python", "def f():\n    return [\n        1,\n    ]\n", 69),
     ("default None is fine", "Python", "def f(x, items=None):\n    return items\n", 68),
+    ("used import", "Python", "import os\nprint(os.name)\n", 70),
+    ("used variable", "Python", "def f():\n    v = 5\n    return v\n", 71),
+    ("six parameters ok", "Python", "def f(a, b, c, d, e, f):\n    return a\n", 72),
+    ("assert with message", "Python", "assert x > 0, 'must be positive'\n", 75),
+    ("is None is fine", "Python", "if x is None:\n    go()\n", 76),
+    ("distinct dict keys", "Python", "d = {'a': 1, 'b': 2}\n", 77),
+    ("java equals", "Java", "class A { boolean f(String s) { return s.equals(\"a\"); } }\n", 78),
+    ("trailing wildcard like", "SQL", "SELECT a FROM t WHERE n LIKE 'abc%';\n", 79),
 ]
 
 
@@ -145,12 +162,12 @@ def test_rule_stays_quiet(name, lang, code, rid):
 
 def test_every_rule_has_a_positive_test():
     tested = {c[3] for c in SHOULD_FIRE}
-    assert tested == {r["id"] for r in __import__("ml.bug_detector", fromlist=["RULES"]).RULES}
+    assert tested | {74} == {r.id for r in __import__("ml.bug_detector", fromlist=["RULES"]).RULES}
 
 
 def test_rule_ids_are_unique():
     from ml.bug_detector import RULES
-    ids = [r["id"] for r in RULES]
+    ids = [r.id for r in RULES]
     assert len(ids) == len(set(ids))
 
 

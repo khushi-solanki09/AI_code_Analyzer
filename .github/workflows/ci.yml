@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Tests
+        run: python -m pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t ai-code-analyzer .
+      - name: Smoke test the container
+        run: |
+          docker run -d --name app -p 8000:8000 ai-code-analyzer
+          for i in $(seq 1 30); do curl -fs http://localhost:8000/health && break; sleep 1; done
+          curl -fs -X POST http://localhost:8000/analyze \
+            -H 'Content-Type: application/json' \
+            -d '{"code":"x = eval(s)","language":"Python"}' | grep -q '"rule_id"'
